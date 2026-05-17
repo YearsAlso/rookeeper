@@ -1,0 +1,11 @@
+[package]
+name = "rookeeper-client"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+rookeeper-platform = { path = "../rookeeper-platform" }
+rookeeper-protocol = { path = "../rookeeper-protocol" }

@@ -1,0 +1,29 @@
+[server]
+node_name = "local-node"
+primary_transport = "auto"
+fallback_transport = "local_tcp"
+request_queue_depth = 1024
+session_timeout_ms = 30000
+
+[storage]
+root_dir = "./data"
+wal_dir = "wal"
+snapshot_dir = "snapshot"
+state_dir = "state"
+lock_file = "rookeeper.lock"
+max_wal_segment_bytes = 67108864
+snapshot_interval_commands = 10000
+
+[auth]
+mode = "disabled"
+token_file = "./config/tokens.toml"
+
+[observability]
+log_format = "json"
+log_level = "info"
+metrics_bind = "127.0.0.1:9642"
+enable_metrics = true
+
+[compatibility]
+normalize_paths = true
+allow_backslash_paths = true
