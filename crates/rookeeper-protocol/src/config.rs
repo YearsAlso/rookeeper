@@ -1,5 +1,5 @@
 //! 服务配置定义 - 服务器、存储、认证、可观测性等子系统的配置结构
-//! 
+//!
 //! 设计原则：
 //! - 所有配置项都有合理默认值，降低上手门槛
 //! - 使用 PathBuf 而非 String 处理文件系统路径，避免跨平台兼容问题
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 /// 传输模式选择，自动检测或手动指定
-/// 
+///
 /// Auto 模式会根据操作系统选择最佳传输方式
 /// 特定模式用于测试或特殊网络环境
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -28,7 +28,7 @@ pub enum TransportMode {
 }
 
 /// 认证模式，用于控制访问权限
-/// 
+///
 /// Phase 0 仅支持禁用认证，TokenFile 模式将在后续阶段实现
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -52,7 +52,7 @@ pub enum LogFormat {
 }
 
 /// 服务器运行时配置
-/// 
+///
 /// 这些值决定了服务的行为和性能特征
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerConfig {
@@ -188,7 +188,7 @@ impl Default for CompatibilityConfig {
 }
 
 /// 完整的服务配置，聚合所有子系统配置
-/// 
+///
 /// 这是配置加载的顶层结构，通常从配置文件或环境变量读取
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ServiceConfig {

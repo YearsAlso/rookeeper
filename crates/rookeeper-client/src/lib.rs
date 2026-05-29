@@ -1,7 +1,7 @@
 //! rookeeper-client
-//! 
+//!
 //! 客户端引导程序，负责从共享配置派生端点和请求头。
-//! 
+//!
 //! 设计原则：
 //! - 客户端不自行定义传输或配置逻辑，复用 platform 和 protocol 中的共享类型
 //! - 请求头构造统一化，确保客户端/服务端协议版本一致
@@ -35,7 +35,7 @@ impl Default for ClientOptions {
 }
 
 /// 客户端引导程序，负责初始化客户端实例
-/// 
+///
 /// 从 ServiceConfig 派生所有必要的连接参数
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientBootstrap {
@@ -44,7 +44,7 @@ pub struct ClientBootstrap {
 
 impl ClientBootstrap {
     /// 从服务配置构造引导程序
-    /// 
+    ///
     /// 端点根据配置的传输模式选择：
     /// - Auto 使用平台默认值
     /// - 特定模式使用对应地址格式
@@ -53,7 +53,7 @@ impl ClientBootstrap {
             TransportMode::Auto => default_endpoint("rookeeper"),
             TransportMode::UnixDomainSocket => "unix:///tmp/rookeeper.sock".to_string(),
             TransportMode::NamedPipe => r"pipe://./pipe/rookeeper".to_string(),
-            TransportMode::LocalTcp => "tcp://127.0.0.1:9641".to_string(),
+            TransportMode::LocalTcp => "tcp://127.0.0.1:9641/rookeeper".to_string(),
         };
 
         Self {
@@ -66,7 +66,7 @@ impl ClientBootstrap {
     }
 
     /// 构造请求帧头部
-    /// 
+    ///
     /// 会话 ID 初始化为 0，正式连接前由服务端分配
     pub fn build_header(
         &self,

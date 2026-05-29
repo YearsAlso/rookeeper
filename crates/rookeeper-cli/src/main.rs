@@ -1,7 +1,7 @@
 //! rookeeper-cli 主程序入口
-//! 
+//!
 //! Phase 0 维护 CLI：提供状态查询和路径规范化等基础维护功能。
-//! 
+//!
 //! 设计原则：
 //! - CLI 复用共享的 platform 和 protocol 类型，确保与服务端行为一致
 //! - 命令输出面向机器解析（JSON/纯文本），便于脚本集成
@@ -13,7 +13,7 @@ use rookeeper_protocol::model::NodePath;
 use rookeeper_protocol::wire::PROTOCOL_VERSION_V1;
 
 /// CLI 入口结构
-/// 
+///
 /// 使用 clap derive 模式自动生成帮助和命令补全
 #[derive(Debug, Parser)]
 #[command(name = "rookeeper-cli")]
@@ -24,7 +24,7 @@ struct Cli {
 }
 
 /// 可用命令列表
-/// 
+///
 /// Phase 0 仅实现最基础的维护操作
 /// 后续阶段将添加节点管理、ACL 修改等命令
 #[derive(Debug, Subcommand)]

@@ -1,5 +1,5 @@
 //! 错误码定义 - 协调服务可能遇到的各种错误类型
-//! 
+//!
 //! 错误码采用 u16 确保可以跨语言/跨平台传递
 //! 255 保留给内部未预期错误，避免泄露敏感信息
 
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// 协调服务错误码，采用枚举确保类型安全
-/// 
+///
 /// 设计原则：错误码按功能分组（0-99 成功/业务错误，100-199 权限/安全，200+ 系统错误）
 /// 这样便于日志分析和监控告警规则配置
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,7 +49,7 @@ impl ErrorCode {
 }
 
 /// 结构化错误类型，包含错误码和可读消息
-/// 
+///
 /// 消息字段用于调试和问题诊断，但不应用于程序逻辑判断
 /// 因为消息文本可能因版本而变化
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Error)]

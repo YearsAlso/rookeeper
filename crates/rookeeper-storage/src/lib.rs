@@ -1,11 +1,22 @@
 //! rookeeper-storage
-//! 
+//!
 //! 存储布局约定和数据文件命名规范。
-//! 
+//!
 //! 设计原则：
 //! - 所有存储路径通过 StorageLayout 统一管理，避免硬编码路径散落各处
 //! - WAL 和快照文件名使用固定格式便于恢复时扫描
 //! - CRC32 校验确保数据完整性检测
+
+mod snapshot;
+mod state;
+mod wal;
+
+pub mod prelude {
+    //! 常用类型导出
+    pub use super::snapshot::{Snapshot, SnapshotError, SnapshotManager};
+    pub use super::state::RecoveryCursor;
+    pub use super::wal::{OpType, WalEntry, WalError, WalWriter};
+}
 
 use std::path::{Path, PathBuf};
 
@@ -13,7 +24,7 @@ use std::path::{Path, PathBuf};
 pub const DEFAULT_LOCK_FILE: &str = "rookeeper.lock";
 
 /// 存储布局结构，定义了数据目录的组织方式
-/// 
+///
 /// 布局设计：
 /// - `wal/` - 预写日志，顺序写入用于崩溃恢复
 /// - `snapshot/` - 定期快照，用于加速启动和缩小 WAL
@@ -35,7 +46,7 @@ pub struct StorageLayout {
 
 impl StorageLayout {
     /// 从根目录构造完整的存储布局
-    /// 
+    ///
     /// 所有子目录和文件都相对于根目录计算
     pub fn from_root(root: impl AsRef<Path>) -> Self {
         let root = root.as_ref().to_path_buf();
@@ -48,8 +59,16 @@ impl StorageLayout {
         }
     }
 
+    /// 创建所有必要的目录
+    pub fn create_dirs(&self) -> std::io::Result<()> {
+        std::fs::create_dir_all(&self.wal_dir)?;
+        std::fs::create_dir_all(&self.snapshot_dir)?;
+        std::fs::create_dir_all(&self.state_dir)?;
+        Ok(())
+    }
+
     /// 生成指定 WAL 段的文件路径
-    /// 
+    ///
     /// 使用 16 位零填充格式确保文件列表按序号排序
     /// 格式：`wal-{segment_id:016}.log`
     pub fn wal_segment_path(&self, segment_id: u64) -> PathBuf {
@@ -57,17 +76,24 @@ impl StorageLayout {
     }
 
     /// 生成指定代际的快照文件路径
-    /// 
+    ///
     /// 使用 16 位零填充格式确保文件列表按代际排序
     /// 格式：`snapshot-{generation:016}.bin`
     pub fn snapshot_path(&self, generation: u64) -> PathBuf {
         self.snapshot_dir
             .join(format!("snapshot-{generation:016}.bin"))
     }
+
+    /// 生成状态文件路径
+    ///
+    /// 格式：`state/{name}.meta`
+    pub fn state_path(&self, name: &str) -> PathBuf {
+        self.state_dir.join(format!("{}.meta", name))
+    }
 }
 
 /// 计算数据的 CRC32 校验和
-/// 
+///
 /// 用于检测传输或存储过程中的数据损坏
 pub fn checksum(bytes: &[u8]) -> u32 {
     crc32fast::hash(bytes)

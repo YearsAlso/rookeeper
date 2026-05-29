@@ -1,5 +1,5 @@
 //! Wire 协议定义 - 二进制帧格式和请求/事件类型
-//! 
+//!
 //! 设计原则：
 //! - 固定 24 字节头部确保解析效率，无需遍历可变长头部
 //! - 请求和事件类型分离，避免混淆
@@ -15,7 +15,7 @@ use crate::model::SessionId;
 pub const PROTOCOL_VERSION_V1: u16 = 1;
 
 /// 帧头部固定长度，确保二进制解析的确定性
-/// 
+///
 /// 结构布局（24字节）：
 /// - version: u16 (2字节) - 协议版本
 /// - request_kind: u16 (2字节) - 请求类型
@@ -27,7 +27,7 @@ pub const PROTOCOL_VERSION_V1: u16 = 1;
 pub const FRAME_HEADER_LEN: usize = 24;
 
 /// 请求类型枚举，定义客户端可以发起的操作
-/// 
+///
 /// 这些类型直接对应协调服务的核心能力：
 /// - 读写节点数据
 /// - 监听变化事件
@@ -59,7 +59,7 @@ pub enum RequestKind {
 }
 
 /// 事件类型枚举，定义服务端可以推送的通知
-/// 
+///
 /// 事件是单向的，由服务端主动推送给已订阅的客户端
 /// 用于实现 watch 机制和状态同步
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -104,7 +104,7 @@ pub struct FrameHeader {
 
 impl FrameHeader {
     /// 构造新的帧头部
-    /// 
+    ///
     /// 版本固定为 PROTOCOL_VERSION_V1
     /// flags 和 reserved 初始化为 0，后续可扩展
     pub fn new(
@@ -126,7 +126,7 @@ impl FrameHeader {
 }
 
 /// 请求帧，包含头部和载荷数据
-/// 
+///
 /// 载荷格式由 request_kind 决定，通常是序列化后的请求结构
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RequestFrame {

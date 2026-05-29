@@ -1,7 +1,7 @@
 //! rookeeper-platform
-//! 
+//!
 //! 平台抽象层，封装操作系统相关行为。
-//! 
+//!
 //! 设计原则：
 //! - 平台差异代码集中于此，避免散落到业务逻辑中
 //! - 通过枚举而非条件编译暴露平台能力，便于类型检查
@@ -30,7 +30,7 @@ pub enum IpcTransport {
 }
 
 /// 检测当前运行的操作系统
-/// 
+///
 /// 使用编译时条件确定，零运行时开销
 pub fn current_os() -> OperatingSystem {
     if cfg!(target_os = "windows") {
@@ -43,7 +43,7 @@ pub fn current_os() -> OperatingSystem {
 }
 
 /// 获取当前操作系统推荐的默认 IPC 传输方式
-/// 
+///
 /// 选择依据：
 /// - Linux 使用 Unix 域套接字，性能最优
 /// - Windows 使用命名管道，行为最可靠
@@ -57,7 +57,7 @@ pub fn default_ipc_transport() -> IpcTransport {
 }
 
 /// 构造服务的默认端点地址
-/// 
+///
 /// 格式根据传输方式不同：
 /// - Unix 域套接字：`unix:///tmp/{service_name}.sock`
 /// - 命名管道：`pipe://./pipe/{service_name}`
@@ -66,12 +66,12 @@ pub fn default_endpoint(service_name: &str) -> String {
     match default_ipc_transport() {
         IpcTransport::UnixDomainSocket => format!("unix:///tmp/{service_name}.sock"),
         IpcTransport::NamedPipe => format!(r"pipe://./pipe/{service_name}"),
-        IpcTransport::LocalTcp => "tcp://127.0.0.1:9641".to_string(),
+        IpcTransport::LocalTcp => format!("tcp://127.0.0.1:9641/{service_name}"),
     }
 }
 
 /// 获取系统服务名称
-/// 
+///
 /// 用于端点构造和日志标识
 pub fn system_service_name() -> &'static str {
     "rookeeper"

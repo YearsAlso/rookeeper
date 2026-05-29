@@ -1,5 +1,5 @@
 //! 模型定义 - 节点路径、会话、节点元数据等核心数据结构
-//! 
+//!
 //! 设计原则：
 //! - 路径规范化集中在此处，避免散落在业务代码中处理反斜杠等兼容性问题
 //! - 确保工业控制环境下的路径安全性（禁止父路径遍历）
@@ -18,7 +18,7 @@ pub type CommandId = u64;
 pub type SessionId = u64;
 
 /// 节点路径，经过规范化后统一使用 Unix 风格 `/` 分隔符
-/// 
+///
 /// 规范化规则：
 /// - 输入允许 `\` 和 `/` 混合（兼容 Windows 和工业环境）
 /// - 去除重复分隔符（如 `//`）
@@ -29,7 +29,7 @@ pub struct NodePath(String);
 
 impl NodePath {
     /// 解析并规范化路径字符串
-    /// 
+    ///
     /// 失败场景：路径包含 `..` 父路径遍历时返回错误
     /// 这是安全考量，防止客户端通过 `..` 访问受保护目录
     pub fn parse(raw: &str) -> Result<Self, &'static str> {
@@ -72,7 +72,7 @@ impl Display for NodePath {
 }
 
 /// 节点类型，决定节点的生命周期和访问语义
-/// 
+///
 /// 工业控制场景需要区分持久节点（重启后保留）和临时节点（会话结束时自动清理）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -88,7 +88,7 @@ pub enum NodeKind {
 }
 
 /// 节点的元数据信息，用于版本控制和操作追踪
-/// 
+///
 /// 设计理由：使用命令 ID 而非时间戳，确保状态机的确定性
 /// 时间戳在分布式环境中会引入不一致性
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,7 +117,7 @@ pub struct NodeRecord {
 }
 
 /// 会话租约，用于管理客户端连接的存活状态
-/// 
+///
 /// 设计考量：租约超时机制比心跳更高效，减少网络往返
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionLease {

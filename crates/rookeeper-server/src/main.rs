@@ -1,7 +1,7 @@
 //! rookeeper-server 主程序入口
-//! 
+//!
 //! Phase 0 引导程序：初始化追踪、解析参数、输出服务器摘要。
-//! 
+//!
 //! 实际服务运行逻辑将在后续阶段实现，当前仅提供基础设施验证。
 
 use std::path::PathBuf;
@@ -13,7 +13,7 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 /// 命令行参数解析
-/// 
+///
 /// 设计考量：
 /// - `--config` 保留但当前不生效，明确告知用户配置加载尚未实现
 /// - `--print-layout` 用于验证存储布局是否符合预期
@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    
+
     // 加载配置（当前仅返回默认配置）
     let config = load_config(args.config.as_deref())?;
     let bootstrap = ServerBootstrap::from_config(config);

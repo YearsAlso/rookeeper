@@ -1,6 +1,21 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. It follows the **OpenSpec SDD** (Specification-Driven Development) principles.
+
+## OpenSpec Core Principles
+
+- **fluid not rigid** — no phase gates, work on-demand
+- **iterative not waterfall** — iterate, learn, and adjust as you go
+- **easy not complex** — lightweight, minimal ceremony
+- **brownfield-first** — always work with the existing codebase, never against it
+
+## Project Status
+
+**Phase 0 — Project Baseline (~20% complete)**
+- Stable module boundaries and shared models defined
+- Crate structure established: `protocol`, `storage`, `platform`, `client`, `server`, `cli`
+- NOT yet implemented: full KV, Watcher, lock, or persistence
+- Phase 1 will add: tree KV, WAL, recovery, ACL, and basic CLI
 
 ## Build, test, and lint
 
@@ -76,6 +91,40 @@ Toolchain: stable, rust-version 1.82, with clippy and rustfmt components (see `r
 - **Phase 0 is intentionally thin**. `rookeeper-server::load_config` currently returns `ServiceConfig::default()` and rejects external config files, pointing callers to `config/rookeeper.default.toml`. Do not assume runtime config loading is implemented.
 - **Workspace dependencies are pinned in root `Cargo.toml`**. Add shared dependencies to `[workspace.dependencies]` and reference with `.workspace = true` in member crates.
 
-## Phase boundaries
+## Phase Boundaries
 
-Phase 0 (current): project baseline — stable module boundaries and shared models only. No full KV, Watcher, lock, or persistence implementation yet. Phase 1 will add tree KV, WAL, recovery, ACL, and basic CLI.
+### Phase 0 — Current (Baseline) ✓
+**Status: ~20% complete — module structure and types stable**
+
+| Deliverable | Status | Notes |
+| --- | --- | --- |
+| Crate layout | ✓ Done | `protocol`, `storage`, `platform`, `client`, `server`, `cli` |
+| `NodePath` normalization | ✓ Done | Centralized in `rookeeper-protocol` |
+| Protocol frame types | ✓ Done | 24-byte header in `rookeeper-protocol::wire` |
+| Storage layout def | ✓ Done | In `rookeeper-storage::StorageLayout` |
+| Platform abstraction | ✓ Done | Linux→UDS, Windows→named pipe, fallback→TCP |
+| Config loading | ⚠ Partial | Returns `ServiceConfig::default()`, no file loading yet |
+
+**Phase 0 boundary**: All business logic (KV, Watch, Lock, Persistence) is out of scope.
+
+### Phase 1 — Next Iteration
+**Scope**: Tree KV, WAL, recovery, ACL, basic CLI
+
+**Start-from**: When Phase 1 work begins, read `docs/` files again — they are **design constraints**, not background reading.
+
+## Working with Specs (Iterative + Fluid Approach)
+
+1. **Start by reading `docs/`** — `architecture-baseline.md`, `protocol-baseline.md`, `storage-layout.md` define your constraints
+2. **When uncertain, check the spec first** — don't guess, consult the existing design
+3. **Iterate in small steps** — no big upfront design, evolve incrementally
+4. **If spec is unclear, ask** — treat this document as the single source of truth
+
+## Spec Files (Design Constraints)
+
+| File | Role |
+| --- | --- |
+| `docs/architecture-baseline.md` | Module boundaries, crate responsibilities |
+| `docs/protocol-baseline.md` | Wire protocol, frame format, request/event kinds |
+| `docs/storage-layout.md` | Directory layout, WAL/snapshot naming conventions |
+
+> **Note**: `docs/` files are **constraints**, not suggestions. Code must comply with them.
