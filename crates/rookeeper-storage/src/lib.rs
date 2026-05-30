@@ -15,7 +15,7 @@ pub mod prelude {
     //! 常用类型导出
     pub use super::snapshot::{Snapshot, SnapshotError, SnapshotManager};
     pub use super::state::RecoveryCursor;
-    pub use super::wal::{OpType, WalEntry, WalError, WalWriter};
+    pub use super::wal::{OpType, WalEntry, WalError, WalReader, WalWriter};
 }
 
 use std::path::{Path, PathBuf};

@@ -366,13 +366,19 @@ impl WalWriter {
     /// 写入日志条目
     ///
     /// 返回写入后的偏移量
+    /// 格式：len(4 bytes) + encoded_entry
     pub fn write(&mut self, entry: &WalEntry) -> IoResult<u64> {
         let encoded = entry.encode();
-        let len = encoded.len() as u64;
+        let len = encoded.len() as u32;
 
-        self.file.write_all(&encoded)?;
         let written_offset = self.offset;
-        self.offset += len;
+
+        // 写入长度前缀
+        self.file.write_all(&len.to_le_bytes())?;
+        // 写入编码后的数据
+        self.file.write_all(&encoded)?;
+
+        self.offset += 4 + encoded.len() as u64;
 
         Ok(written_offset)
     }
@@ -413,6 +419,132 @@ impl WalWriter {
 
         self.offset = 0;
 
+        Ok(())
+    }
+}
+
+/// WAL 读取器
+///
+/// 用于顺序读取 WAL 日志文件并重放命令
+pub struct WalReader {
+    /// 当前读取的文件
+    file: File,
+    /// 当前段 ID
+    segment_id: u64,
+    /// 文件路径生成器
+    path_cb: Box<dyn Fn(u64) -> PathBuf>,
+    /// 是否到达文件末尾
+    eof: bool,
+    /// 当前读取位置（字节偏移）
+    position: u64,
+}
+
+impl WalReader {
+    /// 创建新的 WAL 读取器
+    ///
+    /// # Arguments
+    /// * `segment_id` - 起始段 ID
+    /// * `path_cb` - 路径生成回调函数
+    pub fn new(segment_id: u64, path_cb: impl Fn(u64) -> PathBuf + 'static) -> IoResult<Self> {
+        let path = path_cb(segment_id);
+        let file = OpenOptions::new().read(true).open(&path)?;
+
+        Ok(Self {
+            file,
+            segment_id,
+            path_cb: Box::new(path_cb),
+            eof: false,
+            position: 0,
+        })
+    }
+
+    /// 读取下一条 WAL 条目
+    ///
+    /// # Returns
+    /// - `Ok(Some(entry))` - 成功读取一条日志
+    /// - `Ok(None)` - 已到达 WAL 末尾
+    /// - `Err(WalError)` - 读取错误
+    pub fn read_entry(&mut self) -> Result<Option<WalEntry>, WalError> {
+        if self.eof {
+            return Ok(None);
+        }
+
+        // 读取字节长度前缀（4字节）
+        let mut len_buf = [0u8; 4];
+        match std::io::Read::read_exact(&mut self.file, &mut len_buf) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                self.eof = true;
+                return Ok(None);
+            }
+            Err(e) => return Err(WalError::IoError(e)),
+        }
+
+        self.position += 4;
+
+        let len = u32::from_le_bytes(len_buf) as usize;
+
+        // 读取指定长度的字节
+        let mut data = vec![0u8; len];
+        match std::io::Read::read_exact(&mut self.file, &mut data) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                self.eof = true;
+                return Ok(None);
+            }
+            Err(e) => return Err(WalError::IoError(e)),
+        }
+
+        self.position += len as u64;
+
+        // 解码条目
+        match WalEntry::decode(&data) {
+            Ok(entry) => Ok(Some(entry)),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// 获取当前读取位置（字节偏移）
+    pub fn offset(&self) -> u64 {
+        self.position
+    }
+
+    /// 检查是否到达文件末尾
+    pub fn is_eof(&self) -> bool {
+        self.eof
+    }
+
+    /// 获取当前段 ID
+    pub fn segment_id(&self) -> u64 {
+        self.segment_id
+    }
+
+    /// 移动到下一段
+    ///
+    /// # Returns
+    /// - `Ok(true)` - 成功切换到下一段
+    /// - `Ok(false)` - 下一段不存在
+    pub fn advance_segment(&mut self) -> IoResult<bool> {
+        let next_id = self.segment_id + 1;
+        let next_path = (self.path_cb)(next_id);
+
+        if !next_path.exists() {
+            return Ok(false);
+        }
+
+        self.segment_id = next_id;
+        self.file = OpenOptions::new().read(true).open(&next_path)?;
+        self.eof = false;
+
+        Ok(true)
+    }
+
+    /// 重置到指定段
+    pub fn reset_to(&mut self, segment_id: u64) -> IoResult<()> {
+        let path = (self.path_cb)(segment_id);
+        self.file = OpenOptions::new().read(true).open(&path)?;
+        self.segment_id = segment_id;
+        self.eof = false;
         Ok(())
     }
 }

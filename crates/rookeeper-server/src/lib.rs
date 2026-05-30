@@ -7,12 +7,18 @@
 //! - 配置加载支持文件加载和环境变量覆盖
 //! - 引导流程清晰分离，便于测试和监控
 
+mod recovery;
+mod tree_kv;
+
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 use rookeeper_platform::default_endpoint;
 use rookeeper_protocol::config::{ServiceConfig, TransportMode};
 use rookeeper_storage::StorageLayout;
+
+pub use crate::recovery::RecoveryManager;
+pub use crate::tree_kv::{TreeKv, TreeKvError};
 
 /// 服务端引导程序，包含运行时初始化所需的所有组件
 #[derive(Debug, Clone)]

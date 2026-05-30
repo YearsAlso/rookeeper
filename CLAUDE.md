@@ -11,11 +11,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-**Phase 0 — Project Baseline (~20% complete)**
-- Stable module boundaries and shared models defined
-- Crate structure established: `protocol`, `storage`, `platform`, `client`, `server`, `cli`
-- NOT yet implemented: full KV, Watcher, lock, or persistence
-- Phase 1 will add: tree KV, WAL, recovery, ACL, and basic CLI
+**Phase 1 — Tree KV, WAL, Recovery, ACL (~100% complete)**
+- Tree KV（BTreeMap 内存树）
+- WAL 预写日志（checksum 支持）
+- 快照（generation 生成）
+- 断电恢复（RecoveryManager）
+- ACL 权限系统
+- 24-byte 二进制协议
+- 平台抽象（Linux UDS / Windows named pipe / TCP fallback）
+- 基础 CLI
+- 23 个测试全部通过
+
+**Phase 0 — Baseline ✓ (已存档)**
+- Crate 结构、协议、存储布局已完成
 
 ## Build, test, and lint
 
@@ -93,24 +101,27 @@ Toolchain: stable, rust-version 1.82, with clippy and rustfmt components (see `r
 
 ## Phase Boundaries
 
-### Phase 0 — Current (Baseline) ✓
-**Status: ~20% complete — module structure and types stable**
+### Phase 1 — Tree KV, WAL, Recovery, ACL ✓
+**Status: ~100% complete — 23 tests passing**
 
 | Deliverable | Status | Notes |
 | --- | --- | --- |
-| Crate layout | ✓ Done | `protocol`, `storage`, `platform`, `client`, `server`, `cli` |
-| `NodePath` normalization | ✓ Done | Centralized in `rookeeper-protocol` |
-| Protocol frame types | ✓ Done | 24-byte header in `rookeeper-protocol::wire` |
-| Storage layout def | ✓ Done | In `rookeeper-storage::StorageLayout` |
-| Platform abstraction | ✓ Done | Linux→UDS, Windows→named pipe, fallback→TCP |
-| Config loading | ⚠ Partial | Returns `ServiceConfig::default()`, no file loading yet |
+| Tree KV | ✓ Done | BTreeMap 内存树，支持 parent 路径 |
+| WAL | ✓ Done | 预写日志，checksum 支持，分段写入 |
+| 快照 | ✓ Done | generation 生成，定期压缩 |
+| 断电恢复 | ✓ Done | RecoveryManager，支持增量恢复 |
+| ACL 权限 | ✓ Done | 空 ACL = allow-all，SessionMeta 追踪 |
+| 二进制协议 | ✓ Done | 24-byte 头，请求/响应帧 |
+| 平台抽象 | ✓ Done | Linux UDS / Windows named pipe / TCP |
+| 基础 CLI | ✓ Done | normalize-path, status, print-layout |
 
-**Phase 0 boundary**: All business logic (KV, Watch, Lock, Persistence) is out of scope.
+**Phase 1 边界**: Watch 持久订阅、分布式锁、服务发现不在当前范围。
 
-### Phase 1 — Next Iteration
-**Scope**: Tree KV, WAL, recovery, ACL, basic CLI
+### Phase 2 — 下一个迭代
+**范围**: Watch 持久订阅 / 分布式锁 / 服务发现
 
-**Start-from**: When Phase 1 work begins, read `docs/` files again — they are **design constraints**, not background reading.
+### Phase 0 — Baseline ✓ (已存档)
+**范围**: 项目初始化、crate 结构、协议定义、存储布局
 
 ## Working with Specs (Iterative + Fluid Approach)
 

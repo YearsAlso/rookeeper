@@ -24,7 +24,7 @@ pub type SessionId = u64;
 /// - 去除重复分隔符（如 `//`）
 /// - 跳过空段和 `.`（当前目录引用）
 /// - 拒绝 `..`（防止父路径遍历攻击）
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct NodePath(String);
 
 impl NodePath {
