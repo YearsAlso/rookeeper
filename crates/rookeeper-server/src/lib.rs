@@ -8,7 +8,9 @@
 //! - 引导流程清晰分离，便于测试和监控
 
 mod recovery;
+mod server;
 mod tree_kv;
+mod watch;
 
 use std::path::Path;
 
@@ -18,7 +20,9 @@ use rookeeper_protocol::config::{ServiceConfig, TransportMode};
 use rookeeper_storage::StorageLayout;
 
 pub use crate::recovery::RecoveryManager;
-pub use crate::tree_kv::{TreeKv, TreeKvError};
+pub use crate::server::{RookeeperServer, ServerError};
+pub use crate::tree_kv::{TreeKv, TreeKvError, TreeKvEvent};
+pub use crate::watch::{WatchEvent, WatchManager};
 
 /// 服务端引导程序，包含运行时初始化所需的所有组件
 #[derive(Debug, Clone)]

@@ -6,13 +6,28 @@
 //! - 使用 BTreeMap 存储节点，确保确定性迭代顺序
 //! - 版本控制使用命令 ID（而非时间戳）确保状态机确定性
 //! - 所有路径操作通过 NodePath::parse 验证
+//! - TTL 支持：节点可以在指定时间后自动过期删除
 
 use std::collections::BTreeMap;
+use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use rookeeper_protocol::acl::{Acl, AclChecker, Permission};
 use rookeeper_protocol::error::ErrorCode;
 use rookeeper_protocol::model::{CommandId, NodeKind, NodeMetadata, NodePath};
+
+/// TreeKv 内部事件，用于通知外部系统节点变更
+#[derive(Debug, Clone)]
+pub enum TreeKvEvent {
+    /// 节点被创建
+    NodeCreated(NodePath),
+    /// 节点被更新
+    NodeUpdated(NodePath),
+    /// 节点被删除
+    NodeDeleted(NodePath),
+    /// 节点过期（TTL 触发）
+    NodeExpired(NodePath),
+}
 
 /// 树形 KV 存储错误类型
 #[derive(Debug)]
@@ -55,6 +70,8 @@ pub struct KvNode {
     pub metadata: NodeMetadata,
     /// 访问控制列表
     pub acl: Acl,
+    /// TTL 过期时间（如果设置了 TTL）
+    pub expires_at: Option<Instant>,
 }
 
 /// 树形键值存储
@@ -168,6 +185,7 @@ impl TreeKv {
     /// * `path` - 节点路径
     /// * `value` - 节点值
     /// * `session_subject` - 会话主题（用于 ACL 检查）
+    /// * `ttl_seconds` - TTL 过期秒数，None 表示永不过期，0 也表示永不过期
     ///
     /// # Returns
     /// - `Ok(())` - 创建成功
@@ -177,6 +195,7 @@ impl TreeKv {
         path: &NodePath,
         value: Bytes,
         session_subject: &str,
+        ttl_seconds: Option<u64>,
     ) -> Result<(), TreeKvError> {
         // 检查路径是否已存在
         if self.nodes.contains_key(path) {
@@ -188,6 +207,15 @@ impl TreeKv {
 
         let command_id = self.next_command_id();
 
+        // 计算过期时间：TTL=0 或 None 表示永不过期
+        let expires_at = ttl_seconds.and_then(|ttl| {
+            if ttl > 0 {
+                Some(Instant::now() + Duration::from_secs(ttl))
+            } else {
+                None
+            }
+        });
+
         let node = KvNode {
             value,
             metadata: NodeMetadata {
@@ -197,6 +225,7 @@ impl TreeKv {
                 kind: NodeKind::Persistent,
             },
             acl: Acl::default(), // 默认 ACL
+            expires_at,
         };
 
         self.nodes.insert(path.clone(), node);
@@ -226,6 +255,7 @@ impl TreeKv {
     /// * `value` - 新的节点值
     /// * `expected_version` - 期望的版本号（用于乐观锁），None 表示不检查
     /// * `session_subject` - 会话主题（用于 ACL 检查）
+    /// * `ttl_seconds` - TTL 过期秒数，None 表示保持当前 TTL，0 表示永不过期
     ///
     /// # Returns
     /// - `Ok(())` - 更新成功
@@ -236,6 +266,7 @@ impl TreeKv {
         value: Bytes,
         expected_version: Option<u64>,
         session_subject: &str,
+        ttl_seconds: Option<u64>,
     ) -> Result<(), TreeKvError> {
         // 检查权限（Write 权限）
         self.check_permission(path, Permission::Write, session_subject)?;
@@ -252,6 +283,17 @@ impl TreeKv {
         node.value = value;
         node.metadata.version += 1;
         node.metadata.modify_command_id = command_id;
+
+        // 更新 TTL：如果提供了 TTL 参数
+        if ttl_seconds.is_some() {
+            node.expires_at = ttl_seconds.and_then(|ttl| {
+                if ttl > 0 {
+                    Some(Instant::now() + Duration::from_secs(ttl))
+                } else {
+                    None
+                }
+            });
+        }
 
         Ok(())
     }
@@ -316,6 +358,35 @@ impl TreeKv {
         self.command_id
     }
 
+    /// 获取所有过期的节点路径
+    pub fn expired_nodes(&self) -> Vec<NodePath> {
+        let now = Instant::now();
+        self.nodes
+            .iter()
+            .filter(|(_, node)| node.expires_at.map(|exp| now > exp).unwrap_or(false))
+            .map(|(path, _)| path.clone())
+            .collect()
+    }
+
+    /// 删除过期节点，返回被删除的节点数量
+    ///
+    /// 注意：这不会触发 Watch 事件，因为 TTL 过期是系统行为而非用户操作
+    pub fn clean_expired(&mut self) -> usize {
+        let now = Instant::now();
+        let expired: Vec<NodePath> = self
+            .nodes
+            .iter()
+            .filter(|(_, node)| node.expires_at.map(|exp| now > exp).unwrap_or(false))
+            .map(|(path, _)| path.clone())
+            .collect();
+
+        let count = expired.len();
+        for path in expired {
+            self.nodes.remove(&path);
+        }
+        count
+    }
+
     /// 从快照恢复
     pub fn restore_from_snapshot(&mut self, snapshot: &TreeKvSnapshot) {
         self.nodes.clear();
@@ -332,6 +403,7 @@ impl TreeKv {
                             kind: node_data.kind,
                         },
                         acl: Acl::default(),
+                        expires_at: None, // 快照恢复不保留 TTL
                     },
                 );
             }
@@ -389,7 +461,7 @@ mod tests {
         let mut tree = TreeKv::new();
         let path = NodePath::parse("/test/node").unwrap();
 
-        tree.create(&path, Bytes::from("value"), "user").unwrap();
+        tree.create(&path, Bytes::from("value"), "user", None).unwrap();
 
         let node = tree.get(&path, "user").unwrap();
         assert_eq!(node.value.as_ref(), b"value");
@@ -401,14 +473,14 @@ mod tests {
         let mut tree = TreeKv::new();
         let path = NodePath::parse("/test/node").unwrap();
 
-        tree.create(&path, Bytes::from("value"), "user").unwrap();
+        tree.create(&path, Bytes::from("value"), "user", None).unwrap();
 
         // 错误的版本号应该失败
-        let result = tree.set(&path, Bytes::from("new"), Some(999), "user");
+        let result = tree.set(&path, Bytes::from("new"), Some(999), "user", None);
         assert!(matches!(result, Err(TreeKvError::VersionConflict)));
 
         // 正确的版本号应该成功
-        tree.set(&path, Bytes::from("new"), Some(1), "user")
+        tree.set(&path, Bytes::from("new"), Some(1), "user", None)
             .unwrap();
         let node = tree.get(&path, "user").unwrap();
         assert_eq!(node.value.as_ref(), b"new");
@@ -420,7 +492,7 @@ mod tests {
         let mut tree = TreeKv::new();
         let path = NodePath::parse("/test/node").unwrap();
 
-        tree.create(&path, Bytes::from("value"), "user").unwrap();
+        tree.create(&path, Bytes::from("value"), "user", None).unwrap();
         tree.delete(&path, "user").unwrap();
 
         let result = tree.get(&path, "user");
@@ -435,24 +507,28 @@ mod tests {
             &NodePath::parse("/parent/child1").unwrap(),
             Bytes::from("v1"),
             "user",
+            None,
         )
         .unwrap();
         tree.create(
             &NodePath::parse("/parent/child2").unwrap(),
             Bytes::from("v2"),
             "user",
+            None,
         )
         .unwrap();
         tree.create(
             &NodePath::parse("/parent/child3").unwrap(),
             Bytes::from("v3"),
             "user",
+            None,
         )
         .unwrap();
         tree.create(
             &NodePath::parse("/other").unwrap(),
             Bytes::from("v"),
             "user",
+            None,
         )
         .unwrap();
 
@@ -472,12 +548,14 @@ mod tests {
             &NodePath::parse("/test/node1").unwrap(),
             Bytes::from("v1"),
             "user",
+            None,
         )
         .unwrap();
         tree.create(
             &NodePath::parse("/test/node2").unwrap(),
             Bytes::from("v2"),
             "user",
+            None,
         )
         .unwrap();
 

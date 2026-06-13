@@ -56,6 +56,10 @@ pub enum RequestKind {
     RegisterService = 9,
     /// 查询服务状态
     GetStatus = 10,
+    /// 健康检查
+    HealthCheck = 11,
+    /// 指标请求
+    MetricsRequest = 12,
 }
 
 /// 事件类型枚举，定义服务端可以推送的通知
@@ -81,6 +85,28 @@ pub enum EventKind {
     ServiceRegistered = 7,
     /// 服务注销
     ServiceUnregistered = 8,
+}
+
+/// 健康检查响应
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthCheckResponse {
+    /// 服务是否健康
+    pub healthy: bool,
+    /// 运行时模式 ("memory" or "persistent")
+    pub mode: String,
+    /// 版本信息
+    pub version: String,
+    /// 服务运行时间（秒）
+    pub uptime_seconds: u64,
+    /// 节点数量
+    pub node_count: usize,
+}
+
+/// 指标响应
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetricsResponse {
+    /// Prometheus text format 指标数据
+    pub prometheus_text: String,
 }
 
 /// 帧头部结构，描述每个请求/响应帧的元信息

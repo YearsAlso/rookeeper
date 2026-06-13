@@ -305,11 +305,11 @@ impl RecoveryManager {
         match entry.op_type {
             OpType::Create => {
                 let value = entry.value.clone().unwrap_or_default();
-                let _ = tree.create(&path, Bytes::from(value), "system");
+                let _ = tree.create(&path, Bytes::from(value), "system", None);
             }
             OpType::Set => {
                 let value = entry.value.clone().unwrap_or_default();
-                let _ = tree.set(&path, Bytes::from(value), None, "system");
+                let _ = tree.set(&path, Bytes::from(value), None, "system", None);
             }
             OpType::Delete => {
                 let _ = tree.delete(&path, "system");

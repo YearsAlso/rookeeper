@@ -9,6 +9,19 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::model::SessionId;
+
+/// 运行时模式
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeMode {
+    /// 内存模式：不创建 WAL，不持久化数据
+    #[default]
+    Memory,
+    /// 持久化模式：启用 WAL 预写日志
+    Persistent,
+}
+
 /// 传输模式选择，自动检测或手动指定
 ///
 /// Auto 模式会根据操作系统选择最佳传输方式
@@ -104,6 +117,8 @@ pub struct StorageConfig {
     /// 快照间隔命令数，经过此数量操作后触发快照
     /// 平衡内存使用和恢复时间
     pub snapshot_interval_commands: u64,
+    /// 运行时模式：memory（不持久化）或 persistent（启用 WAL）
+    pub mode: RuntimeMode,
 }
 
 impl Default for StorageConfig {
@@ -119,6 +134,8 @@ impl Default for StorageConfig {
             max_wal_segment_bytes: 64 * 1024 * 1024,
             // 1 万次操作后创建快照，平衡内存和启动时间
             snapshot_interval_commands: 10_000,
+            // 默认内存模式，便于开发测试
+            mode: RuntimeMode::Memory,
         }
     }
 }
@@ -190,11 +207,33 @@ impl Default for CompatibilityConfig {
 /// 完整的服务配置，聚合所有子系统配置
 ///
 /// 这是配置加载的顶层结构，通常从配置文件或环境变量读取
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServiceConfig {
     pub server: ServerConfig,
     pub storage: StorageConfig,
     pub auth: AuthConfig,
     pub observability: ObservabilityConfig,
     pub compatibility: CompatibilityConfig,
+    /// TCP 监听地址（默认 0.0.0.0:8080）
+    pub tcp_bind: String,
+}
+
+impl Default for ServiceConfig {
+    fn default() -> Self {
+        Self {
+            server: ServerConfig::default(),
+            storage: StorageConfig::default(),
+            auth: AuthConfig::default(),
+            observability: ObservabilityConfig::default(),
+            compatibility: CompatibilityConfig::default(),
+            tcp_bind: "0.0.0.0:8080".to_string(),
+        }
+    }
+}
+
+impl ServiceConfig {
+    /// 获取运行时模式
+    pub fn runtime_mode(&self) -> RuntimeMode {
+        self.storage.mode
+    }
 }
