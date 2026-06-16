@@ -9,6 +9,10 @@
 
 mod recovery;
 mod server;
+mod lock;
+mod registry;
+mod backpressure;
+mod session;
 mod tree_kv;
 mod watch;
 

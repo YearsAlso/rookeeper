@@ -28,13 +28,15 @@ pub const FRAME_HEADER_LEN: usize = 24;
 
 /// 请求类型枚举，定义客户端可以发起的操作
 ///
+/// 枚举值直接对应 u16 编号（通过 serde 序列化控制）。
+/// Phase 1: 1-12, Phase 2: 13-20
+///
 /// 这些类型直接对应协调服务的核心能力：
 /// - 读写节点数据
 /// - 监听变化事件
 /// - 分布式锁管理
 /// - 服务注册与发现
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[repr(u16)]
 pub enum RequestKind {
     /// 读取节点数据
     Get = 1,
@@ -48,26 +50,45 @@ pub enum RequestKind {
     List = 5,
     /// 订阅节点变化事件
     Watch = 6,
-    /// 获取分布式锁
+    /// 获取分布式锁（Phase 1 保留编号，Phase 2 实现）
     AcquireLock = 7,
-    /// 释放分布式锁
+    /// 释放分布式锁（Phase 1 保留编号，Phase 2 实现）
     ReleaseLock = 8,
-    /// 注册服务实例
+    /// 注册服务实例（Phase 1 保留编号，Phase 2 实现）
     RegisterService = 9,
-    /// 查询服务状态
+    /// 查询服务状态（Phase 1 保留编号，Phase 2 实现）
     GetStatus = 10,
     /// 健康检查
     HealthCheck = 11,
     /// 指标请求
     MetricsRequest = 12,
+    // ─────── Phase 2 新增请求类型 ───────
+    /// 取消订阅
+    CancelWatch = 13,
+    /// 获取锁（阻塞/非阻塞/超时）
+    AcquireLockV2 = 14,
+    /// 释放锁
+    ReleaseLockV2 = 15,
+    /// 注册服务实例
+    RegisterServiceV2 = 16,
+    /// 注销服务实例
+    UnregisterService = 17,
+    /// 列举服务实例
+    ListServices = 18,
+    /// 会话心跳保活
+    SessionHeartbeat = 19,
+    /// 查询锁状态
+    GetLockState = 20,
 }
 
 /// 事件类型枚举，定义服务端可以推送的通知
 ///
+/// 枚举值直接对应 u16 编号（通过 serde 序列化控制）。
+/// Phase 1: 1-8, Phase 2: 9-15
+///
 /// 事件是单向的，由服务端主动推送给已订阅的客户端
 /// 用于实现 watch 机制和状态同步
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[repr(u16)]
 pub enum EventKind {
     /// 节点被创建
     NodeCreated = 1,
@@ -77,14 +98,29 @@ pub enum EventKind {
     NodeDeleted = 3,
     /// 子节点列表发生变化
     ChildrenChanged = 4,
-    /// 锁被获取
+    /// 锁被获取（Phase 1 保留编号）
     LockAcquired = 5,
-    /// 锁被释放
+    /// 锁被释放（Phase 1 保留编号）
     LockReleased = 6,
-    /// 服务注册成功
+    /// 服务注册成功（Phase 1 保留编号）
     ServiceRegistered = 7,
-    /// 服务注销
+    /// 服务注销（Phase 1 保留编号）
     ServiceUnregistered = 8,
+    // ─────── Phase 2 新增事件类型 ───────
+    /// Watch 订阅超时
+    WatchExpired = 9,
+    /// 锁获取成功
+    LockAcquiredV2 = 10,
+    /// 锁释放
+    LockReleasedV2 = 11,
+    /// 锁被强制回收（会话断开/租约到期）
+    LockRevoked = 12,
+    /// 服务注册成功
+    ServiceRegisteredV2 = 13,
+    /// 服务注销
+    ServiceUnregisteredV2 = 14,
+    /// 服务实例下线
+    ServiceOffline = 15,
 }
 
 /// 健康检查响应

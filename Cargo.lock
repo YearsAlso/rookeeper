@@ -394,8 +394,14 @@ dependencies = [
 name = "rookeeper-client"
 version = "0.1.0"
 dependencies = [
+ "bincode",
+ "bytes",
  "rookeeper-platform",
  "rookeeper-protocol",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
