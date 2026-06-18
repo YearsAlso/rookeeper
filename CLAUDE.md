@@ -1,141 +1,151 @@
-# CLAUDE.md
+# Rookeeper — Distributed Coordination Service
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. It follows the **OpenSpec SDD** (Specification-Driven Development) principles.
+## Project Overview
 
-## OpenSpec Core Principles
+Rookeeper is a distributed coordination service (similar to etcd/ZooKeeper) built in Rust. Currently in **Phase 2** development.
 
-- **fluid not rigid** — no phase gates, work on-demand
-- **iterative not waterfall** — iterate, learn, and adjust as you go
-- **easy not complex** — lightweight, minimal ceremony
-- **brownfield-first** — always work with the existing codebase, never against it
+**Repository:** `~/Project/Rookeeper/`
 
-## Project Status
+## Document Conventions
 
-**Phase 1 — Tree KV, WAL, Recovery, ACL (~100% complete)**
-- Tree KV（BTreeMap 内存树）
-- WAL 预写日志（checksum 支持）
-- 快照（generation 生成）
-- 断电恢复（RecoveryManager）
-- ACL 权限系统
-- 24-byte 二进制协议
-- 平台抽象（Linux UDS / Windows named pipe / TCP fallback）
-- 基础 CLI
-- 23 个测试全部通过
+| File | Role |
+|------|------|
+| `docs/` | Project documentation library (specs, ADRs, protocol docs) |
+| `TODO.md` | Task list and progress tracker |
+| `openspec/` | OpenSpec spec-driven development root |
 
-**Phase 0 — Baseline ✓ (已存档)**
-- Crate 结构、协议、存储布局已完成
+## OpenSpec / SDD Requirements
 
-## Build, test, and lint
+Rookeeper follows **OpenSpec Spec-Driven Development (SDD)** for all features and changes.
 
-```powershell
-cargo fmt --all --check        # Format check
-cargo clippy --workspace --all-targets -- -D warnings  # Lint (gate)
-cargo check --workspace        # Compilation check
-cargo test --workspace         # All tests
+### Core Principles
+```
+fluid not rigid         — 无阶段门，按需工作
+iterative not waterfall — 迭代式，边做边学
+easy not complex       — 轻量级，最小仪式感
+brownfield-first       — 兼容现有代码库
 ```
 
-Run a single crate or test:
-```powershell
-cargo test -p rookeeper-protocol
-cargo test -p rookeeper-protocol model::tests::rejects_parent_segments
-cargo test -p rookeeper-storage checksum_is_stable
-cargo test -p rookeeper-client creates_headers_with_version
+### OpenSpec Directory Structure
+```
+openspec/
+├── specs/                     # 规范源头（系统当前行为）
+│   └── <domain>/
+│       └── spec.md
+├── changes/                   # 变更提案
+│   └── <change-name>/
+│       ├── proposal.md        # 为什么做 + 做什么
+│       ├── design.md          # 怎么做（技术方案）
+│       ├── tasks.md           # 实现清单
+│       └── specs/             # Delta spec
+└── config.yaml
 ```
 
-Bootstrap binaries:
-```powershell
-cargo run -p rookeeper-server -- --print-layout
-cargo run -p rookeeper-cli -- status
-cargo run -p rookeeper-cli -- normalize-path "\plant\\line1/robot3//config"
+### Workflow
+Any feature or change MUST go through the OpenSpec workflow:
 ```
+/opsx:propose → /opsx:apply → /opsx:sync → /opsx:archive
+```
+1. **propose**: 创建 `changes/<name>/proposal.md` + `design.md` + `tasks.md`
+2. **apply**: 编码实现，遵循 spec
+3. **sync**: 将变更同步到 `specs/<domain>/spec.md`
+4. **archive**: 归档已完成变更
 
-Toolchain: stable, rust-version 1.82, with clippy and rustfmt components (see `rust-toolchain.toml`).
+### Spec Format
+- Requirements: 使用 RFC 2119 关键词 (`SHALL`/`MUST`/`SHOULD`/`MAY`)
+- Scenarios: 使用 `GIVEN/WHEN/THEN` 格式
+- 每个新模块/功能必须先有 spec，再实现
 
 ## Architecture
 
-`rookeeper` is a single-node coordination service for industrial-control environments. The workspace is split so future phases can layer behavior on top of already-stable types.
+```
+rookeeper-protocol/   # Wire protocol types, error codes, frame formats
+rookeeper-platform/   # OS abstraction, config defaults
+rookeeper-storage/    # TreeKv + WAL + Snapshot persistence layer
+rookeeper-server/     # Server implementation (main crate)
+rookeeper-client/     # Client SDK + CLI support
+rookeeper-cli/        # Command-line tool
+```
 
-### Crate responsibilities
+## Current Phase: Phase 2 (Implementation in Progress)
 
-| Crate | Role |
-| --- | --- |
-| `rookeeper-protocol` | Shared source of truth: ACLs, path normalization, node/session models, config structs, error codes, binary frame types. Other crates import from here, not re-define. |
-| `rookeeper-storage` | Storage layout conventions for `data/`, `wal/`, `snapshot/`, `state/`, plus WAL/snapshot filename generation and checksum helpers. |
-| `rookeeper-platform` | Platform abstraction for OS detection and default IPC selection. Linux → Unix domain socket, Windows → named pipe, fallback → local TCP. |
-| `rookeeper-client` | Client bootstrap that derives endpoints and request headers from shared config/protocol types. |
-| `rookeeper-server` | Server bootstrap that turns `ServiceConfig` into a runtime summary and storage layout. |
-| `rookeeper-cli` | Thin maintenance CLI over shared protocol/platform types. |
+Phase 2 adds distributed coordination primitives:
+- **p2-1** ✅ `lock.rs` — Distributed lock (ephemeral + sequential nodes, FIFO)
+- **p2-2** ✅ `session.rs` — Session management (lease, heartbeat, ephemeral binding)
+- **p2-3** ✅ `registry.rs` — Service registry & discovery
+- **p2-4** ✅ `backpressure.rs` — Watch event delivery backpressure (Drop-Newest)
+- **p2-5** ✅ `sdk.rs` — High-level async Rust SDK
+- **p2-6** ✅ CLI — Session/lock/service/watch subcommands
+- **p2-8** 🔄 Integration tests
 
-### Intended dependency direction
+## Key Design Decisions
 
-1. `rookeeper-protocol` defines shared models.
-2. `rookeeper-storage` and `rookeeper-platform` build infrastructure around those models.
-3. `rookeeper-client` and `rookeeper-server` consume those crates instead of redefining transport, path, or config logic.
-4. Future state-machine, persistence, watcher, and session logic plug into these crates rather than bypassing them.
+### Lock Design
+- Lock nodes stored at `/locks/{lock_name}/{session_id}-{sequence}`
+- Sequence number provides FIFO ordering (lowest sequence = lock holder)
+- No separate coordination protocol — uses TreeKv + Watch only
+- Session disconnect → `cleanup_session()` auto-releases held locks
 
-## Key cross-file design points
+### Watch Design
+- Phase 1: `broadcast` channel for event dispatch
+- Phase 2: Per-session bounded `mpsc` queue with Drop-Newest backpressure
+- Pattern matching: exact path or glob (`*` and `**`)
 
-1. **Path handling is centralized in `rookeeper-protocol::model::NodePath`**. Paths accept both `\` and `/` on input, normalize internally to Unix-style `/...`, reject `..` parent segments and `.` references. Reuse `NodePath::parse` instead of hand-normalizing.
+### Storage Design
+- TreeKv: in-memory tree with path hierarchy
+- WAL: append-only log for crash recovery
+- Snapshot: periodic full-state snapshots
 
-2. **Transport defaults are centralized in `rookeeper-platform`**. OS detection, IPC transport selection, and default endpoint construction live here. If endpoint selection changes, update platform helpers and client/server bootstrap together.
+## Phase 1 Protocol Types
 
-3. **Storage layout is centralized in `rookeeper-storage::StorageLayout`**. WAL/snapshot naming conventions come from this type. Layout:
-   ```
-   data/
-     wal/wal-{segment_id:016}.log
-     snapshot/snapshot-{generation:016}.bin
-     state/cluster.meta
-     rookeeper.lock
-   ```
+| Request (u8) | Event (u8) | Error (u8) |
+|---|---|---|
+| 1: Get | 1: NodeCreated | 1: PathNotFound |
+| 2: Set | 2: NodeUpdated | 2: PathAlreadyExists |
+| 3: Create | 3: NodeDeleted | 3: VersionConflict |
+| 4: Delete | 4: ChildrenChanged | 4: PermissionDenied |
+| 5: List | 5: NodeExpired | 5: InvalidPath |
+| 6: Watch | | 6: SessionExpired |
+| 7: SessionCreate | | 7: LockBusy |
+| 8: SessionHeartbeat | | 8: ResourceExhausted |
+| 9: SessionClose | | 9: StorageCorruption |
+| 10: RegisterService | | 10: TransportUnavailable |
+| 11: ListServices | | 11: UnsupportedVersion |
+| 12: DeregisterService | | |
 
-4. **Protocol frame details live in `rookeeper-protocol::wire`**. Request kinds, event kinds, header shape, and protocol version stay aligned with `docs/protocol-baseline.md`. Frame is a 24-byte fixed header: version (u16), request_kind (u16), flags (u16), reserved (u16), request_id (u32), session_id (u64), payload_len (u32).
+### Phase 2 Protocol Extensions
 
-## Design constraints
+| Request (u8) | Event (u8) | Error (u8) |
+|---|---|---|
+| 13: CancelWatch | 9: WatchExpired | 12: LockTimeout |
+| 14: AcquireLock | 10: LockAcquired | 13: SessionNotFound |
+| 15: ReleaseLock | 11: LockReleased | 14: ServiceAlreadyRegistered |
+| 16: CreateSession | 12: SessionExpired | 15: LockNotHeld |
+| 17: Heartbeat | 13: HeartbeatAck | 16: WatchNotFound |
+| 18: RegisterServiceV2 | 14: ServiceChanged | |
+| 19: DeregisterServiceV2 | 15: LockWaitTimeout | |
+| 20: ListServicesV2 | | |
 
-- **Keep platform differences in `rookeeper-platform`** only. Do not scatter `cfg!(target_os = ...)` through business code.
-- **Use shared config/model types from `rookeeper-protocol`**. Server, client, CLI, and later persistence code depend on the same structs rather than redefining them.
-- **State-machine behavior must be deterministic**. Architecture docs explicitly require avoiding external time/randomness as decision inputs.
-- **Treat `docs/` as design constraints**. `architecture-baseline.md`, `protocol-baseline.md`, and `storage-layout.md` describe intended module boundaries and naming/layout rules — not background reading.
-- **Phase 0 is intentionally thin**. `rookeeper-server::load_config` currently returns `ServiceConfig::default()` and rejects external config files, pointing callers to `config/rookeeper.default.toml`. Do not assume runtime config loading is implemented.
-- **Workspace dependencies are pinned in root `Cargo.toml`**. Add shared dependencies to `[workspace.dependencies]` and reference with `.workspace = true` in member crates.
+## Key Commands
 
-## Phase Boundaries
+```bash
+# Build
+cargo build --workspace
 
-### Phase 1 — Tree KV, WAL, Recovery, ACL ✓
-**Status: ~100% complete — 23 tests passing**
+# Run tests
+cargo test --workspace --lib
 
-| Deliverable | Status | Notes |
-| --- | --- | --- |
-| Tree KV | ✓ Done | BTreeMap 内存树，支持 parent 路径 |
-| WAL | ✓ Done | 预写日志，checksum 支持，分段写入 |
-| 快照 | ✓ Done | generation 生成，定期压缩 |
-| 断电恢复 | ✓ Done | RecoveryManager，支持增量恢复 |
-| ACL 权限 | ✓ Done | 空 ACL = allow-all，SessionMeta 追踪 |
-| 二进制协议 | ✓ Done | 24-byte 头，请求/响应帧 |
-| 平台抽象 | ✓ Done | Linux UDS / Windows named pipe / TCP |
-| 基础 CLI | ✓ Done | normalize-path, status, print-layout |
+# Test specific module
+cargo test -p rookeeper-server --lib -- lock
 
-**Phase 1 边界**: Watch 持久订阅、分布式锁、服务发现不在当前范围。
+# Build CLI
+cargo build -p rookeeper-cli
+```
 
-### Phase 2 — 下一个迭代
-**范围**: Watch 持久订阅 / 分布式锁 / 服务发现
+## Code Standards
 
-### Phase 0 — Baseline ✓ (已存档)
-**范围**: 项目初始化、crate 结构、协议定义、存储布局
-
-## Working with Specs (Iterative + Fluid Approach)
-
-1. **Start by reading `docs/`** — `architecture-baseline.md`, `protocol-baseline.md`, `storage-layout.md` define your constraints
-2. **When uncertain, check the spec first** — don't guess, consult the existing design
-3. **Iterate in small steps** — no big upfront design, evolve incrementally
-4. **If spec is unclear, ask** — treat this document as the single source of truth
-
-## Spec Files (Design Constraints)
-
-| File | Role |
-| --- | --- |
-| `docs/architecture-baseline.md` | Module boundaries, crate responsibilities |
-| `docs/protocol-baseline.md` | Wire protocol, frame format, request/event kinds |
-| `docs/storage-layout.md` | Directory layout, WAL/snapshot naming conventions |
-
-> **Note**: `docs/` files are **constraints**, not suggestions. Code must comply with them.
+- All public items require Rust doc comments (`///`)
+- Module doc block at top of every `.rs` file
+- Error propagation with `ErrorCode` (no `unwrap()` on user/controlled paths)
+- No locks held across `.await` points
+- All async tasks must be properly cancelled on session close
