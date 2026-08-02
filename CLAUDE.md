@@ -23,7 +23,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cargo fmt --all --check        # Format check
 cargo clippy --workspace --all-targets -- -D warnings  # Lint (gate)
 cargo check --workspace        # Compilation check
-cargo test --workspace         # All tests
+cargo check --workspace --target x86_64-unknown-linux-gnu  # Cross-compile check (CI)
+cargo test --workspace         # All tests (CI: Ubuntu + Windows)
 ```
 
 Run a single crate or test:
@@ -51,12 +52,12 @@ Toolchain: stable, rust-version 1.82, with clippy and rustfmt components (see `r
 
 | Crate | Role |
 | --- | --- |
-| `rookeeper-protocol` | Shared source of truth: ACLs, path normalization, node/session models, config structs, error codes, binary frame types. Other crates import from here, not re-define. |
-| `rookeeper-storage` | Storage layout conventions for `data/`, `wal/`, `snapshot/`, `state/`, plus WAL/snapshot filename generation and checksum helpers. |
-| `rookeeper-platform` | Platform abstraction for OS detection and default IPC selection. Linux → Unix domain socket, Windows → named pipe, fallback → local TCP. |
-| `rookeeper-client` | Client bootstrap that derives endpoints and request headers from shared config/protocol types. |
-| `rookeeper-server` | Server bootstrap that turns `ServiceConfig` into a runtime summary and storage layout. |
-| `rookeeper-cli` | Thin maintenance CLI over shared protocol/platform types. |
+| `crates/rookeeper-protocol` | Shared source of truth: ACLs, path normalization, node/session models, config structs, error codes, binary frame types. Other crates import from here, not re-define. |
+| `crates/rookeeper-storage` | Storage layout conventions for `data/`, `wal/`, `snapshot/`, `state/`, plus WAL/snapshot filename generation, checksum helpers, and sub-modules: `wal`, `snapshot`, `state`. See `prelude` module for common re-exports. |
+| `crates/rookeeper-platform` | Platform abstraction for OS detection and default IPC selection. Linux → Unix domain socket, Windows → named pipe, fallback → local TCP. |
+| `crates/rookeeper-client` | Client bootstrap that derives endpoints and request headers from shared config/protocol types. |
+| `crates/rookeeper-server` | Server bootstrap that turns `ServiceConfig` into a runtime summary and storage layout. |
+| `crates/rookeeper-cli` | Thin maintenance CLI over shared protocol/platform types. |
 
 ### Intended dependency direction
 
@@ -88,7 +89,7 @@ Toolchain: stable, rust-version 1.82, with clippy and rustfmt components (see `r
 - **Use shared config/model types from `rookeeper-protocol`**. Server, client, CLI, and later persistence code depend on the same structs rather than redefining them.
 - **State-machine behavior must be deterministic**. Architecture docs explicitly require avoiding external time/randomness as decision inputs.
 - **Treat `docs/` as design constraints**. `architecture-baseline.md`, `protocol-baseline.md`, and `storage-layout.md` describe intended module boundaries and naming/layout rules — not background reading.
-- **Phase 0 is intentionally thin**. `rookeeper-server::load_config` currently returns `ServiceConfig::default()` and rejects external config files, pointing callers to `config/rookeeper.default.toml`. Do not assume runtime config loading is implemented.
+- **Phase 0 is intentionally thin**. `rookeeper-server::load_config` reads from `config/rookeeper.default.toml` (or a provided path) and returns a `ServiceConfig`; it errors if the file does not exist. The server binary accepts `--config <path>` and `--print-layout` flags. Do not assume runtime IPC or service loop is implemented.
 - **Workspace dependencies are pinned in root `Cargo.toml`**. Add shared dependencies to `[workspace.dependencies]` and reference with `.workspace = true` in member crates.
 
 ## Phase Boundaries
@@ -103,7 +104,7 @@ Toolchain: stable, rust-version 1.82, with clippy and rustfmt components (see `r
 | Protocol frame types | ✓ Done | 24-byte header in `rookeeper-protocol::wire` |
 | Storage layout def | ✓ Done | In `rookeeper-storage::StorageLayout` |
 | Platform abstraction | ✓ Done | Linux→UDS, Windows→named pipe, fallback→TCP |
-| Config loading | ⚠ Partial | Returns `ServiceConfig::default()`, no file loading yet |
+| Config loading | ✓ Done | Reads `config/rookeeper.default.toml`, errors if not found |
 
 **Phase 0 boundary**: All business logic (KV, Watch, Lock, Persistence) is out of scope.
 

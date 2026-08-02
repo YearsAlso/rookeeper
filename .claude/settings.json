@@ -1,0 +1,44 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "agent",
+            "if": "Bash(git commit*)|Bash(git push*)",
+            "prompt": "安全审查 git diff 中的 Rust 变更。按 reviewer agent 的 security-review skill 执行（先 Ollama 机械预审，再 Claude 语义深审）。维度：路径遍历|不安全代码|panic风险|serde安全|并发竞争|工业控制安全。无Rust变更→'✅ 可提交'。有问题→🔴/🟡/🔵+文件:行号+修复。🔴必须修复。",
+            "timeout": 120,
+            "statusMessage": "🔒 提交前安全审查..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "agent",
+            "if": "Write(**/*.sql)|Edit(**/*.sql)",
+            "prompt": "审查 SQL 迁移脚本 $ARGUMENTS。按 reviewer agent 的 sql-migration-review skill 执行：\n\n1. **命名规范** — 序号前缀是否唯一且递增（不跳号、不重复）\n2. **幂等性** — CREATE TYPE 是否有 EXCEPTION 保护、CREATE TABLE 是否有 IF NOT EXISTS\n3. **回滚** — 是否包含同文件 `-- Down` 注释块；**禁止**在 scripts/migrations/ 放置独立 rollback 脚本\n4. **事务块** — 是否包裹在 BEGIN; ... COMMIT; 内\n5. **与 docs/ 一致性** — 比对 docs/storage-layout.md\n\n如果文件不是 .sql，回复'跳过'。",
+            "timeout": 60,
+            "statusMessage": "🗄️ 审查迁移脚本..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":\"【工作流路由】用户提交了新请求：响应前必须先调用 leader agent 解析场景（Bug 修复/方案评估/文档整理/方案设计/机械性代码修改/新需求开发）并按对应 workflow 路由执行（bugfix/design-eval/doc-tidy/design-doc/refactor-mechanical/feature-dev），按编排计划调用各 agent；用户显式指定流程优先；纯信息咨询可跳过路由。路由规则见 CLAUDE.md 与 .claude/agents/leader.md。\"}}'",
+            "timeout": 10,
+            "statusMessage": "🧭 路由提示注入..."
+          }
+        ]
+      }
+    ]
+  }
+}
