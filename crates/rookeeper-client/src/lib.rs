@@ -7,6 +7,8 @@
 //! - 请求头构造统一化，确保客户端/服务端协议版本一致
 //! - 默认值集中管理，便于配置变更
 
+pub mod sdk;
+
 use rookeeper_platform::default_endpoint;
 use rookeeper_protocol::config::{ServiceConfig, TransportMode};
 use rookeeper_protocol::wire::{FrameHeader, RequestKind};

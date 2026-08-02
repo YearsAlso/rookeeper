@@ -7,6 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::error::ErrorCode;
+
 /// 操作权限类型，定义可以对节点执行的动作
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -48,13 +50,95 @@ impl Acl {
     /// 检查指定主题是否拥有特定权限
     ///
     /// 通配符 `*` 匹配所有主题，用于定义公共访问权限
+    ///
+    /// 空 ACL（无条目）默认允许所有操作，这是 Phase 1 的简化策略
     pub fn allows(&self, subject: &str, permission: Permission) -> bool {
+        // Phase 1 简化：空 ACL 允许所有操作
+        if self.entries.is_empty() {
+            return true;
+        }
         self.entries.iter().any(|entry| {
             (entry.subject == "*" || entry.subject == subject)
                 && entry.permissions.contains(&permission)
         })
     }
 }
+
+/// ACL 检查器
+///
+/// 用于在操作前验证会话是否具有足够权限
+#[derive(Debug, Clone, Default)]
+pub struct AclChecker {
+    /// 默认权限（当没有 ACL 条目时的兜底策略）
+    default_permissions: Vec<Permission>,
+}
+
+impl AclChecker {
+    /// 创建新的 ACL 检查器
+    pub fn new() -> Self {
+        Self {
+            default_permissions: Vec::new(),
+        }
+    }
+
+    /// 设置默认权限
+    pub fn with_default_permissions(mut self, permissions: Vec<Permission>) -> Self {
+        self.default_permissions = permissions;
+        self
+    }
+
+    /// 检查会话是否对指定路径拥有特定权限
+    ///
+    /// # Arguments
+    /// * `acl` - 节点的访问控制列表
+    /// * `session_subject` - 会话的主题标识（通常是用户名）
+    /// * `permission` - 需要检查的权限
+    ///
+    /// # Returns
+    /// - `Ok(())` - 权限足够
+    /// - `Err(ErrorCode::PermissionDenied)` - 权限不足
+    pub fn check(
+        &self,
+        acl: &Acl,
+        session_subject: &str,
+        permission: Permission,
+    ) -> Result<(), ErrorCode> {
+        // 首先检查 ACL 条目
+        if acl.allows(session_subject, permission) {
+            return Ok(());
+        }
+
+        // 如果没有匹配，检查默认权限
+        if self.default_permissions.contains(&permission) {
+            return Ok(());
+        }
+
+        Err(ErrorCode::PermissionDenied)
+    }
+}
+
+/// Session 元数据，用于 ACL 检查时获取主题标识
+///
+/// 在实际实现中，这些数据可能存储在 Session 管理器中
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionMeta {
+    /// 会话唯一标识
+    pub session_id: u64,
+    /// 会话主题（通常是用户名或服务名）
+    pub subject: String,
+}
+
+impl SessionMeta {
+    /// 创建新的会话元数据
+    pub fn new(session_id: u64, subject: impl Into<String>) -> Self {
+        Self {
+            session_id,
+            subject: subject.into(),
+        }
+    }
+}
+
+// 重新导出 ErrorCode 以便在 acl 模块使用
 
 #[cfg(test)]
 mod tests {
